@@ -1,0 +1,220 @@
+/* ============================================================
+   Fund Progress Bar – Widget Styles
+   ============================================================ */
+
+/* ---------- Card container ---------- */
+.fpb-card {
+    position: relative;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 32px 28px 28px;
+    text-align: center;
+    overflow: hidden;
+    transition: transform .3s ease, box-shadow .3s ease;
+}
+.fpb-card:hover {
+    transform: translateY(-3px);
+}
+
+/* ---------- Titles ---------- */
+.fpb-title {
+    margin: 0 0 6px;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #1a1a2e;
+    line-height: 1.3;
+}
+.fpb-subtitle {
+    margin: 0 0 24px;
+    font-size: .9rem;
+    color: #666;
+}
+
+/* ============================================================
+   CIRCULAR PROGRESS
+   ============================================================ */
+.fpb-circle-wrap {
+    position: relative;
+    width: 180px;
+    height: 180px;
+    margin: 0 auto 24px;
+}
+.fpb-circle-svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+/* Track (background ring) */
+.fpb-circle-track {
+    stroke: #e0e0e0;
+    transition: stroke .3s;
+}
+
+/* Animated fill ring */
+.fpb-circle-progress {
+    stroke: #27ae60;
+    transition: stroke-dashoffset 0ms linear;   /* duration set by JS */
+    filter: drop-shadow(0 0 6px rgba(39,174,96,.45));
+}
+
+/* Centred percentage label */
+.fpb-circle-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+    line-height: 1;
+}
+.fpb-percent-value {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #27ae60;
+    font-variant-numeric: tabular-nums;
+}
+.fpb-percent-sign {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #444;
+}
+
+/* ============================================================
+   LINEAR PROGRESS
+   ============================================================ */
+.fpb-linear-wrap {
+    margin-top: 8px;
+}
+.fpb-linear-track {
+    width: 100%;
+    height: 18px;
+    background: #e0e0e0;
+    border-radius: 18px;
+    overflow: hidden;
+}
+.fpb-linear-fill {
+    height: 100%;
+    width: 0%;
+    background: #27ae60;
+    border-radius: 18px;
+    transition: width 0ms linear;               /* duration set by JS */
+    position: relative;
+    overflow: hidden;
+}
+
+/* Shimmer animation on the fill */
+.fpb-linear-fill::after {
+    content: '';
+    position: absolute;
+    top: 0; left: -60%;
+    width: 60%; height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255,255,255,.45) 50%,
+        transparent 100%
+    );
+    animation: fpb-shimmer 2s infinite;
+}
+@keyframes fpb-shimmer {
+    0%   { left: -60%; }
+    100% { left: 110%; }
+}
+
+/* Label row beneath the bar */
+.fpb-linear-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+}
+.fpb-percent-text {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #27ae60;
+}
+.fpb-status-text {
+    font-size: .8rem;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+
+/* ============================================================
+   LIVE INDICATOR (small pulsing dot, bottom-right of card)
+   ============================================================ */
+.fpb-live-indicator {
+    position: absolute;
+    bottom: 10px;
+    right: 14px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: .68rem;
+    color: #aaa;
+    user-select: none;
+    pointer-events: none;
+}
+
+/* Dot – pulsing while waiting for live data */
+.fpb-live-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #f39c12;
+    animation: fpb-pulse 1.4s ease-in-out infinite;
+}
+@keyframes fpb-pulse {
+    0%, 100% { opacity: 1;  transform: scale(1); }
+    50%       { opacity: .4; transform: scale(.7); }
+}
+
+/* Dot states */
+.fpb-live-dot.fpb-dot-ok {
+    background: #27ae60;
+    animation: none;
+}
+.fpb-live-dot.fpb-dot-error {
+    background: #e74c3c;
+    animation: none;
+}
+
+/* Hide live-indicator once state is resolved */
+.fpb-card.fpb-live-ok .fpb-live-indicator {
+    animation: none;
+    opacity: .55;
+}
+
+/* ============================================================
+   Content — always visible (lazy-load: default is pre-rendered)
+   ============================================================ */
+.fpb-circle-wrap,
+.fpb-linear-wrap {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* ============================================================
+   ERROR STATE
+   ============================================================ */
+.fpb-card.fpb-error .fpb-error   { display: block !important; color: #c0392b; margin-top: 12px; }
+
+/* ============================================================
+   ERROR STATE
+   ============================================================ */
+.fpb-error {
+    font-size: .9rem;
+    padding: 10px;
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 480px) {
+    .fpb-card { padding: 24px 18px 20px; }
+    .fpb-title { font-size: 1.15rem; }
+    .fpb-circle-wrap { width: 140px; height: 140px; }
+    .fpb-percent-value { font-size: 1.7rem; }
+}
