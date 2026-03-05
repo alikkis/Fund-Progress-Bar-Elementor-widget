@@ -3,7 +3,7 @@
  * Fund Progress Bar – Elementor Widget
  *
  * Renders an animated circular + linear progress bar whose fill percentage
- * is fetched live from api Endpoint
+ * is fetched live from api endpoint
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -75,7 +75,7 @@ class Fund_Progress_Bar_Widget extends Widget_Base {
             'min'         => 3,
             'max'         => 60,
             'step'        => 1,
-            'default'     => 15,
+            'default'     => 30,
             'description' => esc_html__( 'How long to wait for the API before giving up. The bar is visible immediately with the default value — this does NOT block the page.', 'fund-progress-bar' ),
         ] );
 
@@ -237,7 +237,7 @@ class Fund_Progress_Bar_Widget extends Widget_Base {
         $default_pct = max( 0, min( 100, $default_pct ) );
 
         // API timeout in seconds (does NOT block rendering)
-        $api_timeout = isset( $s['api_timeout'] ) ? absint( $s['api_timeout'] ) : 15;
+        $api_timeout = isset( $s['api_timeout'] ) ? absint( $s['api_timeout'] ) : 30;
         $api_timeout = max( 3, $api_timeout );
 
         $show_linear   = in_array( $bar_style, [ 'linear', 'both' ], true );
