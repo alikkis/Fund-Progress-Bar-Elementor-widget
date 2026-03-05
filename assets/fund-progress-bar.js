@@ -1,15 +1,22 @@
 /**
- * Fund Progress Bar – Front-end JavaScript
+ * Fund Progress Bar – Front-end JavaScript v1.1.0
  *
- * Strategy (Lazy Load):
- *  1. Page renders immediately with the PHP-injected default value (no JS needed).
- *  2. After DOM ready, JS fires an async fetch with a configurable long timeout.
- *  3. The rest of the page is NEVER blocked — fetch runs in background.
- *  4. When (if) the API responds, ONLY the widget's numbers/bar re-animate.
- *  5. If API fails/times out → keep showing the default value + subtle error badge.
+ * Fetch strategy:
+ *   Browser  →  /wp-json/fpb/v1/proxy?url=<api>&timeout=<s>  →  PHP wp_remote_get  →  API
+ *
+ * This eliminates CORS and HTTP/HTTPS mixed-content issues entirely.
+ * The page renders instantly with the PHP-injected default value;
+ * the proxy call runs in the background (lazy load).
  */
 (function ($) {
     'use strict';
+
+    var LOG_PREFIX = '[FundProgressBar]';
+
+    /* ── Helpers ──────────────────────────────────────────────────── */
+
+    function log()  { if (window.console && console.log)  console.log.apply(console,  [LOG_PREFIX].concat(Array.prototype.slice.call(arguments))); }
+    function warn() { if (window.console && console.warn) console.warn.apply(console, [LOG_PREFIX].concat(Array.prototype.slice.call(arguments))); }
 
     function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
@@ -25,11 +32,15 @@
         requestAnimationFrame(step);
     }
 
+    /* ── Visual update (only the widget's own DOM nodes) ─────────── */
+
     function updateWidget($card, percentage, animMs) {
         var circumference = parseFloat($card.data('circumference')) || 314.16;
         percentage = Math.max(0, Math.min(100, parseFloat(percentage) || 0));
 
-        /* Circular ring */
+        log('Updating widget #' + $card.attr('id') + ' →', percentage.toFixed(2) + '%');
+
+        /* SVG ring */
         var $ring = $card.find('.fpb-circle-progress');
         if ($ring.length) {
             var offset = circumference - (percentage / 100) * circumference;
@@ -37,7 +48,7 @@
             requestAnimationFrame(function () { $ring.css('stroke-dashoffset', offset); });
         }
 
-        /* Circular counter */
+        /* Circular number */
         var $value = $card.find('.fpb-percent-value');
         if ($value.length) {
             animateCounter($value, parseFloat($value.text()) || 0, percentage, animMs, null);
@@ -59,55 +70,93 @@
         }
     }
 
+    /* ── Status badges ───────────────────────────────────────────── */
+
     function markLive($card) {
         $card.addClass('fpb-live-ok').removeClass('fpb-error');
-        $card.find('.fpb-live-dot').addClass('fpb-dot-ok');
+        $card.find('.fpb-live-dot').removeClass('fpb-dot-error').addClass('fpb-dot-ok');
         $card.find('.fpb-live-label').text('live ✓');
         $card.find('.fpb-error').hide();
     }
 
-    function markError($card) {
+    function markError($card, reason) {
         $card.addClass('fpb-error fpb-live-ok');
-        $card.find('.fpb-live-dot').addClass('fpb-dot-error');
+        $card.find('.fpb-live-dot').removeClass('fpb-dot-ok').addClass('fpb-dot-error');
         $card.find('.fpb-live-label').text('offline');
-        $card.find('.fpb-error').fadeIn(300);
+        var msg = reason ? ' (' + reason + ')' : '';
+        $card.find('.fpb-error').html('⚠ Не вдалось отримати живі дані — відображається значення за замовчуванням.' + msg).fadeIn(300);
+        warn('Marked error on #' + $card.attr('id') + ':', reason);
     }
 
-    /* Background fetch — does NOT block page rendering */
+    /* ── Core fetch via WP REST proxy ────────────────────────────── */
+
     function fetchLiveData($card) {
         var apiUrl    = $card.data('api');
-        var timeoutMs = (parseInt($card.data('timeout'), 10) || 15) * 1000;
+        var timeoutMs = (parseInt($card.data('timeout'), 10) || 30) * 1000;
         var animMs    = parseInt($card.data('anim'), 10) || 1800;
-        if (!apiUrl) return;
 
-        var controller = new AbortController();
-        var timer = setTimeout(function () { controller.abort(); }, timeoutMs);
+        if (!apiUrl) {
+            warn('No API URL configured on widget #' + $card.attr('id'));
+            return;
+        }
 
-        fetch(apiUrl, { method: 'GET', signal: controller.signal, headers: { 'Accept': 'application/json' } })
+        // Build proxy URL: /wp-json/fpb/v1/proxy?url=<encoded>&timeout=<s>
+        var proxyBase   = (typeof fpbConfig !== 'undefined' && fpbConfig.proxyBase)
+                            ? fpbConfig.proxyBase
+                            : '/wp-json/fpb/v1/proxy';
+        var timeoutSecs = Math.ceil(timeoutMs / 1000);
+        var proxyUrl    = proxyBase + '?url=' + encodeURIComponent(apiUrl) + '&timeout=' + timeoutSecs;
+
+        log('Fetching via proxy:', proxyUrl, '(timeout:', timeoutSecs + 's)');
+
+        // AbortController so we can cancel if the user navigates away
+        var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var abortTimer = controller
+            ? setTimeout(function () {
+                controller.abort();
+                warn('Client-side abort after', timeoutMs, 'ms on #' + $card.attr('id'));
+              }, timeoutMs + 2000)   // 2 s grace beyond server timeout
+            : null;
+
+        var fetchOptions = { method: 'GET', headers: { 'Accept': 'application/json' } };
+        if (controller) fetchOptions.signal = controller.signal;
+
+        fetch(proxyUrl, fetchOptions)
             .then(function (res) {
-                clearTimeout(timer);
-                if (!res.ok) throw new Error('HTTP ' + res.status);
+                if (abortTimer) clearTimeout(abortTimer);
+                log('Proxy response status:', res.status);
+                if (!res.ok) throw new Error('Proxy HTTP ' + res.status);
                 return res.json();
             })
             .then(function (data) {
+                log('Received data:', JSON.stringify(data));
                 if (data && typeof data.percentage !== 'undefined') {
                     markLive($card);
                     updateWidget($card, data.percentage, animMs);
-                } else { throw new Error('bad payload'); }
+                } else if (data && data.code) {
+                    // WP_Error forwarded as JSON
+                    throw new Error(data.message || data.code);
+                } else {
+                    throw new Error('Unexpected JSON: ' + JSON.stringify(data));
+                }
             })
             .catch(function (err) {
-                clearTimeout(timer);
-                markError($card);
-                console.warn('[FundProgressBar] fetch failed:', err && err.message);
+                if (abortTimer) clearTimeout(abortTimer);
+                var msg = err && err.message ? err.message : String(err);
+                markError($card, msg);
             });
     }
+
+    /* ── Bootstrap ───────────────────────────────────────────────── */
 
     function initWidgets() {
         $('.fpb-widget').each(function () {
             var $card   = $(this);
             var refresh = parseInt($card.data('refresh'), 10) || 0;
 
-            fetchLiveData($card);   // lazy: fires immediately, doesn't block page
+            log('Init widget #' + $card.attr('id') + ' | refresh:', refresh + 's | timeout:', $card.data('timeout') + 's');
+
+            fetchLiveData($card);
 
             if (refresh > 0) {
                 setInterval(function () { fetchLiveData($card); }, refresh * 1000);
@@ -117,6 +166,7 @@
 
     $(document).ready(initWidgets);
 
+    // Elementor editor preview
     $(window).on('elementor/frontend/init', function () {
         if (typeof elementorFrontend !== 'undefined') {
             elementorFrontend.hooks.addAction(
